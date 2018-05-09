@@ -13,7 +13,6 @@ use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldTypePluginManagerInterface;
 use Drupal\Core\Field\WidgetPluginManager;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Form\SubformState;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\Plugin\PluginDependencyTrait;
 use Drupal\views\Entity\Render\EntityTranslationRenderTrait;
@@ -447,13 +446,9 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
     // Initialize form values.
     $form['#after_build'][] = [$this, 'viewsFormAfterBuild'];
     $form['#cache']['max-age'] = 0;
+    $form['#process'][] = [$this, 'viewsFormProcess'];
     $form['#tree'] = TRUE;
     $form += ['#parents' => []];
-
-    // Set the handler to save the entities, once per relationship.
-    if (!isset($form['actions']['submit']['#submit'][$this->getEntityTypeId()])) {
-      $form['actions']['submit']['#submit'][$this->getEntityTypeId()] = [$this, 'saveEntities'];
-    }
 
     // Only add the buttons if there are results.
     if (!empty($this->getView()->result)) {
@@ -461,32 +456,76 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
       $form[$this->options['id']]['#entity_form_field'] = TRUE;
       foreach ($this->getView()->result as $row_index => $row) {
         // Initialize this row and column.
-        $form[$this->options['id']][$row_index]['#parents'] = [$this->options['id']];
+        $form[$this->options['id']][$row_index]['#parents'] = [$this->options['id'], $row_index];
         $form[$this->options['id']][$row_index]['#tree'] = TRUE;
 
-        $entity = $this->getEntityTranslation($this->getEntity($row), $row);
-
         // Load field definition based on current entity bundle.
+        $entity = $this->getEntityTranslation($this->getEntity($row), $row);
         $field_definition = $this->getBundleFieldDefinition($entity->bundle());
         if ($field_definition && $field_definition->isDisplayConfigurable('form')) {
           $items = $entity->get($field_name)->filterEmptyItems();
 
-          // Add Widget to views-form nested in the correct row and space.
-          $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index];
-          $form[$this->options['id']][$row_index][$field_name]['#tree'] = FALSE;
-
-          // Get widget's subform state
-          $subform_state = SubformState::createForSubform($form[$this->options['id']][$row_index][$field_name], $form, $form_state);
-
           // Add widget to form and add field overrides.
-          $form[$this->options['id']][$row_index][$field_name] = $this->getPluginInstance()->form($items, $form[$this->options['id']][$row_index][$field_name], $subform_state);
+          $form[$this->options['id']][$row_index][$field_name] = $this->getPluginInstance()->form($items, $form[$this->options['id']][$row_index], $form_state);
           $form[$this->options['id']][$row_index][$field_name]['#access'] = $items->access('edit');
           $form[$this->options['id']][$row_index][$field_name]['#title_display'] = 'invisible';
           $form[$this->options['id']][$row_index][$field_name]['widget']['#title_display'] = 'invisible';
-          array_pop($form[$this->options['id']][$row_index][$field_name]['#parents']);
+          $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index, $field_name];
         }
       }
     }
+  }
+
+  /**
+   * Update entity objects based upon the submitted form values.
+   *
+   * @param array $form
+   *   A nested array form elements comprising the form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   * @param bool $validate
+   *   Validate the entity after extracting form values.
+   */
+  protected function buildEntities(array &$form, FormStateInterface $form_state, $validate = FALSE) {
+    $field_name = $this->definition['field_name'];
+
+    // Set this value back to it's relevant entity from each row.
+    foreach ($this->getView()->result as $row_index => $row) {
+      // Check to make sure that this entity has a relevant field.
+      $entity = $this->getEntity($row);
+      if ($entity->hasField($field_name) && $this->getBundleFieldDefinition($entity->bundle())->isDisplayConfigurable('form')) {
+        // Get current entity field values.
+        $items = $entity->get($field_name)->filterEmptyItems();
+
+        // Extract values
+        $this->getPluginInstance($entity->bundle())->extractFormValues($items, $form[$this->options['id']][$row_index], $form_state);
+
+        // Validate entity and add violations to field widget.
+        if ($validate) {
+          $violations = $items->validate();
+          if ($violations->count() > 0) {
+            $this->getPluginInstance($entity->bundle())->flagErrors($items, $violations, $form[$this->options['id']][$row_index], $form_state);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Processes the form, adding the submission handler to save the entities.
+   *
+   * @param array $element
+   *   A nested array form elements comprising the form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   *
+   * @return array $element
+   *   The processed form element.
+   */
+  public function viewsFormProcess(array $element, FormStateInterface $form_state) {
+    $element['#submit'][] = [$this, 'saveEntities'];
+    $element['actions']['submit']['#submit'][] = [$this, 'saveEntities'];
+    return $element;
   }
 
   /**
@@ -497,13 +536,8 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    * processing (e.g. AJAX callbacks) can rely on it.
    */
   public function viewsFormAfterBuild(array $element, FormStateInterface $form_state) {
-    $field_name = $this->definition['field_name'];
-    // Add this field's value back to the entity for each row.
-    foreach ($this->getView()->result as $row_index => $row) {
-      $entity = $this->getEntity($row);
-      if ($entity->hasField($field_name) &&$this->getBundleFieldDefinition($entity->bundle())->isDisplayConfigurable('form')) {
-        $this->getPluginInstance($entity->bundle())->extractFormValues($entity->get($field_name)->filterEmptyItems(), $element[$this->options['id']][$row_index][$field_name], $form_state);
-      }
+    if ($form_state->isProcessingInput()) {
+      $this->buildEntities($element, $form_state);
     }
     return $element;
   }
@@ -512,30 +546,17 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    * {@inheritdoc}
    */
   public function viewsFormValidate(array &$form, FormStateInterface $form_state) {
-    $field_name = $this->definition['field_name'];
-
-    // Validate this field on each row.
-    foreach ($this->getView()->result as $row_index => $row) {
-      $entity = $this->getEntityTranslation($this->getEntity($row), $row);
-
-      // Load field definition based on current entity bundle.
-      $field_definition = $this->getBundleFieldDefinition($entity->bundle());
-      if ($field_definition && $field_definition->isDisplayConfigurable('form')) {
-
-        // Add violations to field widget.
-        $violations = $entity->get($field_name)->validate();
-        if ($violations->count() > 0) {
-          $this->getPluginInstance($entity->bundle())->flagErrors($entity->get($field_name)->filterEmptyItems(), $violations, $form[$this->options['id']][$row_index][$field_name], $form_state);
-        }
-      }
-    }
+    // Re-build entity and validate this field on each row.
+    $form_state->cleanValues();
+    $this->buildEntities($form, $form_state, TRUE);
   }
 
   /**
    * {@inheritdoc}
    */
   public function viewsFormSubmit(array &$form, FormStateInterface $form_state) {
-    // Do nothing.
+    $form_state->cleanValues();
+    $this->buildEntities($form, $form_state);
   }
 
   /**
@@ -547,10 +568,16 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    *   The current state of the form.
    */
   public function saveEntities(array &$form, FormStateInterface $form_state) {
-    $storage = $this->getEntityManager()->getStorage($this->getEntityTypeId());
-    foreach ($this->getView()->result as $row_index => $row) {
-      $entity = $this->getEntityTranslation($this->getEntity($row), $row);
-      $storage->save($entity);
+    // The entity is already built, so we only want to save the entity once.
+    if (is_null($form_state->getTemporaryValue(['saved_entity_types', $this->getEntityTypeId()]))) {
+      // Load storage and save each row.
+      $storage = $this->getEntityManager()->getStorage($this->getEntityTypeId());
+      foreach ($this->getView()->result as $row_index => $row) {
+        $entity = $this->getEntityTranslation($this->getEntity($row), $row);
+        $storage->save($entity);
+      }
+      // Track that thise entity type has been saved.
+      $form_state->setTemporaryValue(['saved_entity_types', $this->getEntityTypeId()], $this->getEntityTypeId());
     }
   }
 
