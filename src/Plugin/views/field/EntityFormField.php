@@ -461,16 +461,15 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
 
         // Load field definition based on current entity bundle.
         $entity = $this->getEntityTranslation($this->getEntity($row), $row);
-        $field_definition = $this->getBundleFieldDefinition($entity->bundle());
-        if ($field_definition && $field_definition->isDisplayConfigurable('form')) {
+        if ($entity->hasField($field_name) && $this->getBundleFieldDefinition($entity->bundle())->isDisplayConfigurable('form')) {
           $items = $entity->get($field_name)->filterEmptyItems();
 
           // Add widget to form and add field overrides.
           $form[$this->options['id']][$row_index][$field_name] = $this->getPluginInstance()->form($items, $form[$this->options['id']][$row_index], $form_state);
           $form[$this->options['id']][$row_index][$field_name]['#access'] = $items->access('edit');
+          $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index, $field_name];
           $form[$this->options['id']][$row_index][$field_name]['#title_display'] = 'invisible';
           $form[$this->options['id']][$row_index][$field_name]['widget']['#title_display'] = 'invisible';
-          $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index, $field_name];
         }
       }
     }
@@ -534,6 +533,14 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    * Updates the internal $this->entity object with submitted values when the
    * form is being rebuilt (e.g. submitted via AJAX), so that subsequent
    * processing (e.g. AJAX callbacks) can rely on it.
+   *
+   * @param array $element
+   *   A nested array form elements comprising the form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   *
+   * @return array $element
+   *   The form element.
    */
   public function viewsFormAfterBuild(array $element, FormStateInterface $form_state) {
     if ($form_state->isProcessingInput()) {
@@ -546,7 +553,6 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    * {@inheritdoc}
    */
   public function viewsFormValidate(array &$form, FormStateInterface $form_state) {
-    // Re-build entity and validate this field on each row.
     $form_state->cleanValues();
     $this->buildEntities($form, $form_state, TRUE);
   }
@@ -578,6 +584,8 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
       }
       // Track that thise entity type has been saved.
       $form_state->setTemporaryValue(['saved_entity_types', $this->getEntityTypeId()], $this->getEntityTypeId());
+
+      // @todo add message confirming that the entities were saved.
     }
   }
 
