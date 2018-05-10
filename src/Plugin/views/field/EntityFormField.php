@@ -444,7 +444,6 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
     $field_name = $this->definition['field_name'];
 
     // Initialize form values.
-    $form['#after_build'][] = [$this, 'viewsFormAfterBuild'];
     $form['#cache']['max-age'] = 0;
     $form['#process'][] = [$this, 'viewsFormProcess'];
     $form['#tree'] = TRUE;
@@ -473,6 +472,39 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
         }
       }
     }
+  }
+
+  /**
+   * Processes the form, adding the submission handler to save the entities.
+   *
+   * @param array $element
+   *   A nested array form elements comprising the form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The current state of the form.
+   *
+   * @return array $element
+   *   The processed form element.
+   */
+  public function viewsFormProcess(array $element, FormStateInterface $form_state) {
+    $element['#submit'][] = [$this, 'saveEntities'];
+    $element['actions']['submit']['#submit'][] = [$this, 'saveEntities'];
+    return $element;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function viewsFormValidate(array &$form, FormStateInterface $form_state) {
+    $form_state->cleanValues();
+    $this->buildEntities($form, $form_state, TRUE);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function viewsFormSubmit(array &$form, FormStateInterface $form_state) {
+    $form_state->cleanValues();
+    $this->buildEntities($form, $form_state);
   }
 
   /**
@@ -511,61 +543,6 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
   }
 
   /**
-   * Processes the form, adding the submission handler to save the entities.
-   *
-   * @param array $element
-   *   A nested array form elements comprising the form.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The current state of the form.
-   *
-   * @return array $element
-   *   The processed form element.
-   */
-  public function viewsFormProcess(array $element, FormStateInterface $form_state) {
-    $element['#submit'][] = [$this, 'saveEntities'];
-    $element['actions']['submit']['#submit'][] = [$this, 'saveEntities'];
-    return $element;
-  }
-
-  /**
-   * Form element #after_build callback: Updates the entity with submitted data.
-   *
-   * Updates the internal $this->entity object with submitted values when the
-   * form is being rebuilt (e.g. submitted via AJAX), so that subsequent
-   * processing (e.g. AJAX callbacks) can rely on it.
-   *
-   * @param array $element
-   *   A nested array form elements comprising the form.
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
-   *   The current state of the form.
-   *
-   * @return array $element
-   *   The form element.
-   */
-  public function viewsFormAfterBuild(array $element, FormStateInterface $form_state) {
-    if ($form_state->isProcessingInput()) {
-      $this->buildEntities($element, $form_state);
-    }
-    return $element;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function viewsFormValidate(array &$form, FormStateInterface $form_state) {
-    $form_state->cleanValues();
-    $this->buildEntities($form, $form_state, TRUE);
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function viewsFormSubmit(array &$form, FormStateInterface $form_state) {
-    $form_state->cleanValues();
-    $this->buildEntities($form, $form_state);
-  }
-
-  /**
    * Save the view's entities.
    *
    * @param array $form
@@ -574,18 +551,47 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    *   The current state of the form.
    */
   public function saveEntities(array &$form, FormStateInterface $form_state) {
-    // The entity is already built, so we only want to save the entity once.
-    if (is_null($form_state->getTemporaryValue(['saved_entity_types', $this->getEntityTypeId()]))) {
-      // Load storage and save each row.
+    // We only want to save the entity once per relationship
+    if (is_null($form_state->getTemporaryValue(['saved_relationships', $this->relationship]))) {
       $storage = $this->getEntityManager()->getStorage($this->getEntityTypeId());
+
+      $rows_saved = [];
+      $rows_failed = [];
+
+      // Try to save this field relationship's relevant entity from each row.
       foreach ($this->getView()->result as $row_index => $row) {
         $entity = $this->getEntityTranslation($this->getEntity($row), $row);
-        $storage->save($entity);
-      }
-      // Track that thise entity type has been saved.
-      $form_state->setTemporaryValue(['saved_entity_types', $this->getEntityTypeId()], $this->getEntityTypeId());
 
-      // @todo add message confirming that the entities were saved.
+        try {
+          $storage->save($entity);
+          $rows_saved[$row_index] = $entity->label();
+        }
+        catch (\Exception $exception) {
+          $rows_failed[$row_index] = $entity->label();
+        }
+      }
+
+      // Let the user know how many entities were saved.
+      $messenger = \Drupal::messenger();
+      $entity_type_definition = $this->entityManager->getDefinition($this->getEntityTypeId());
+      $messenger->addStatus($this->formatPlural(count($rows_saved), '@count @singular_label saved.', '@count @plural_label saved.', [
+        '@count' => count($rows_saved),
+        '@singular_label' => $entity_type_definition->getSingularLabel(),
+        '@plural_label' => $entity_type_definition->getPluralLabel(),
+      ]));
+
+      // Let the user know which entities couldn't be saved.
+      if (count($rows_failed) > 0) {
+        $messenger->addWarning($this->formatPlural(count($rows_failed), '@count @singular_label failed to save: @labels', '@count @plural_label failed to save: @labels', [
+          '@count' => count($rows_failed),
+          '@singular_label' => $entity_type_definition->getSingularLabel(),
+          '@plural_label' => $entity_type_definition->getPluralLabel(),
+          '@labels' => implode(', ', $rows_failed),
+        ]));
+      }
+
+      // Track that this relationship has been saved.
+      $form_state->setTemporaryValue(['saved_relationships', $this->relationship], TRUE);
     }
   }
 
