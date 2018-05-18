@@ -59,7 +59,7 @@ function views_entity_form_field_views_data_alter(array &$data) {
         ];
 
         if (count($bundle_info[$entity_type_id]) > 1) {
-          $data[$entity_type_id]["form_field_{$field_name}"]['field']['help'] = t('Appears in: @bundles.', ['@bundles' => implode(', ', $fields[$field_name]['bundles'])]);
+          $data[$entity_type_id]["form_field_{$field_name}"]['field']['help'] = t('Appears in: @bundles.', ['@bundles' => implode(', ', $field['bundles'])]);
         }
       }
     }

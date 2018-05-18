@@ -174,7 +174,7 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
   protected function getBundleFieldDefinition($bundle = NULL) {
     $bundle = (!is_null($bundle)) ? $bundle : reset($this->definition['bundles']);
     $field_definitions = $this->entityFieldManager->getFieldDefinitions($this->getEntityTypeId(), $bundle);
-    return array_key_exists($this->definition['field_name'], $field_definitions) ? $field_definitions[$this->definition['field_name']] : NULL;
+    return (array_key_exists($this->definition['field_name'], $field_definitions)) ? $field_definitions[$this->definition['field_name']] : NULL;
   }
 
   /**
@@ -337,7 +337,6 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
   protected function defineOptions() {
     $options = parent::defineOptions();
 
-    $options['plugin']['contains']['type']['default'] = $this->getPluginDefaultOption($this->getBundleFieldDefinition()->getType());
     $options['plugin']['contains']['settings']['default'] = [];
     $options['plugin']['contains']['third_party_settings']['default'] = [];
 
