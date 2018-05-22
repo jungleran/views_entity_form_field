@@ -492,7 +492,6 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    */
   public function viewsFormProcess(array $element, FormStateInterface $form_state) {
     $element['#submit'][] = [$this, 'saveEntities'];
-    // $element['actions']['submit']['#submit'][] = [$this, 'saveEntities'];
     return $element;
   }
 
