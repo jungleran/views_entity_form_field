@@ -481,7 +481,7 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
 
           // Add widget to form and add field overrides.
           $form[$this->options['id']][$row_index][$field_name] = $this->getPluginInstance()->form($items, $form[$this->options['id']][$row_index], $form_state);
-          $form[$this->options['id']][$row_index][$field_name]['#access'] = ($entity->access('edit') && $items->access('edit'));
+          $form[$this->options['id']][$row_index][$field_name]['#access'] = ($entity->access('update') && $items->access('edit'));
           $form[$this->options['id']][$row_index][$field_name]['#cache']['contexts'] = $entity->getCacheContexts();
           $form[$this->options['id']][$row_index][$field_name]['#cache']['tags'] = $entity->getCacheTags();
           $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index, $field_name];
