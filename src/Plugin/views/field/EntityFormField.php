@@ -225,12 +225,22 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
     // Cache the created instance per bundle.
     $bundle = (!is_null($bundle)) ? $bundle : reset($this->definition['bundles']);
     if (!isset($this->fieldWidgets[$bundle]) && $field_definition = $this->getBundleFieldDefinition($bundle)) {
-      $this->fieldWidgets[$bundle] = $this->fieldWidgetManager->getInstance([
+      // Compile options.
+      $options = [
         'field_definition' => $field_definition,
         'form_mode' => 'views_view',
         'prepare' => FALSE,
         'configuration' => $this->options['plugin'],
-      ]);
+      ];
+
+      // Unset type if improperly set and set to prepare with default config.
+      if (isset($options['configuration']['type']) && empty($options['configuration']['type'])) {
+        unset($options['configuration']['type']);
+        $options['prepare'] = TRUE;
+      }
+
+      // Load field widget.
+      $this->fieldWidgets[$bundle] = $this->fieldWidgetManager->getInstance($options);
     }
     return $this->fieldWidgets[$bundle];
   }
