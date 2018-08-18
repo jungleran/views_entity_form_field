@@ -484,26 +484,29 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
         $form[$this->options['id']][$row_index]['#parents'] = [$this->options['id'], $row_index];
         $form[$this->options['id']][$row_index]['#tree'] = TRUE;
 
-        // Load field definition based on current entity bundle.
-        $entity = $this->getEntityTranslation($this->getEntity($row), $row);
-        if ($entity->hasField($field_name) && $this->getBundleFieldDefinition($entity->bundle())->isDisplayConfigurable('form')) {
-          $items = $entity->get($field_name)->filterEmptyItems();
+        // Make sure there's an entity for this row (relationships can be null).
+        if ($this->getEntity($row)) {
+          // Load field definition based on current entity bundle.
+          $entity = $this->getEntityTranslation($this->getEntity($row), $row);
+          if ($entity->hasField($field_name) && $this->getBundleFieldDefinition($entity->bundle())->isDisplayConfigurable('form')) {
+            $items = $entity->get($field_name)->filterEmptyItems();
 
-          // Add widget to form and add field overrides.
-          $form[$this->options['id']][$row_index][$field_name] = $this->getPluginInstance()->form($items, $form[$this->options['id']][$row_index], $form_state);
-          $form[$this->options['id']][$row_index][$field_name]['#access'] = ($entity->access('update') && $items->access('edit'));
-          $form[$this->options['id']][$row_index][$field_name]['#cache']['contexts'] = $entity->getCacheContexts();
-          $form[$this->options['id']][$row_index][$field_name]['#cache']['tags'] = $entity->getCacheTags();
-          $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index, $field_name];
+            // Add widget to form and add field overrides.
+            $form[$this->options['id']][$row_index][$field_name] = $this->getPluginInstance()->form($items, $form[$this->options['id']][$row_index], $form_state);
+            $form[$this->options['id']][$row_index][$field_name]['#access'] = ($entity->access('update') && $items->access('edit'));
+            $form[$this->options['id']][$row_index][$field_name]['#cache']['contexts'] = $entity->getCacheContexts();
+            $form[$this->options['id']][$row_index][$field_name]['#cache']['tags'] = $entity->getCacheTags();
+            $form[$this->options['id']][$row_index][$field_name]['#parents'] = [$this->options['id'], $row_index, $field_name];
 
-          // Hide field widget title.
-          if ($this->options['plugin']['hide_title']) {
-            $form[$this->options['id']][$row_index][$field_name]['#attributes']['class'][] = 'views-entity-form-field-field-label-hidden';
-          }
+            // Hide field widget title.
+            if ($this->options['plugin']['hide_title']) {
+              $form[$this->options['id']][$row_index][$field_name]['#attributes']['class'][] = 'views-entity-form-field-field-label-hidden';
+            }
 
-          // Hide field widget description.
-          if ($this->options['plugin']['hide_description']) {
-            $form[$this->options['id']][$row_index][$field_name]['#attributes']['class'][] = 'views-entity-form-field-field-description-hidden';
+            // Hide field widget description.
+            if ($this->options['plugin']['hide_description']) {
+              $form[$this->options['id']][$row_index][$field_name]['#attributes']['class'][] = 'views-entity-form-field-field-description-hidden';
+            }
           }
         }
       }
