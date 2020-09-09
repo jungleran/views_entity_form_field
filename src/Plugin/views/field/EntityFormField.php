@@ -9,6 +9,7 @@ use Drupal\Core\Cache\CacheableDependencyInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityManagerInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldTypePluginManagerInterface;
 use Drupal\Core\Field\WidgetPluginManager;
@@ -93,14 +94,14 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
    *   The plugin implementation definition.
    * @param \Drupal\Core\Entity\EntityFieldManagerInterface $entity_field_manager
    *   The entity field manager.
-   * @param \Drupal\Core\Entity\EntityManagerInterface $entity_manager
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_manager
    *   The entity manager.
    * @param \Drupal\Core\Field\WidgetPluginManager
    *   The field widget plugin manager.
    * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
    *   The language manager.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityFieldManagerInterface $entity_field_manager, EntityManagerInterface $entity_manager, WidgetPluginManager $field_widget_manager, LanguageManagerInterface $language_manager) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityFieldManagerInterface $entity_field_manager, EntityTypeManagerInterface $entity_manager, WidgetPluginManager $field_widget_manager, LanguageManagerInterface $language_manager) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
 
     $this->entityFieldManager = $entity_field_manager;
@@ -118,7 +119,7 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
       $plugin_id,
       $plugin_definition,
       $container->get('entity_field.manager'),
-      $container->get('entity.manager'),
+      $container->get('entity_type.manager'),
       $container->get('plugin.manager.field.widget'),
       $container->get('language_manager')
     );
@@ -127,7 +128,7 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
   /**
    * Returns the entity manager.
    *
-   * @return \Drupal\Core\Entity\EntityManagerInterface
+   * @return \Drupal\Core\Entity\EntityTypeManagerInterface
    *   The entity manager service.
    */
   protected function getEntityManager() {
@@ -641,3 +642,4 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
   }
 
 }
+
