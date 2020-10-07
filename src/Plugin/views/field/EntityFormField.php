@@ -641,5 +641,15 @@ class EntityFormField extends FieldPluginBase implements CacheableDependencyInte
     // Do nothing.
   }
 
+  /**
+   * Wrappers the entity type manager.
+   */
+  public function getEntityTypeManager() {
+    if ($this->entityManager !== NULL) {
+      return $this->entityManager;
+    }
+    return \Drupal::service('entity_type.manager');
+  }
+
 }
 
